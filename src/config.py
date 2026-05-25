@@ -17,6 +17,22 @@ class AgentConfig(BaseModel):
     traces_dir: str = "./traces"
 
 
+class SubAgentConfig(BaseModel):
+    """Per-sub-agent overrides (optional)."""
+    max_steps: int | None = None
+    max_tokens: int | None = None
+    model: str | None = None
+
+
+class AgentsConfig(BaseModel):
+    """Configuration for the multi-agent orchestrator."""
+    use_orchestrator: bool = True  # False = legacy single-agent mode
+    supervisor: SubAgentConfig = SubAgentConfig(max_tokens=512)
+    research: SubAgentConfig = SubAgentConfig(max_steps=5, max_tokens=4096)
+    doc_generator: SubAgentConfig = SubAgentConfig(max_steps=10, max_tokens=16384)
+    general: SubAgentConfig = SubAgentConfig(max_steps=8, max_tokens=4096)
+
+
 class ReadFileToolConfig(BaseModel):
     sandbox_dir: str = "./data"
 
@@ -33,6 +49,7 @@ class ToolsConfig(BaseModel):
 class AppConfig(BaseModel):
     llm: LLMConfig = LLMConfig()
     agent: AgentConfig = AgentConfig()
+    agents: AgentsConfig = AgentsConfig()
     tools: ToolsConfig = ToolsConfig()
 
 

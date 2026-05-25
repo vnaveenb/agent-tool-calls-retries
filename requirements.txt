@@ -8,6 +8,9 @@ python-dotenv==1.0.1
 PyYAML==6.0.3
 uvicorn==0.46.0
 
+# Search providers (Tavily recommended, DDG as fallback)
+tavily-python>=0.7
+
 # Document generation (pre-installed for python_repl tool)
 reportlab>=4.0
 python-pptx>=1.0

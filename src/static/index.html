@@ -540,6 +540,15 @@
         /* Scrollbar for step results */
         .step-result::-webkit-scrollbar { width: 3px; }
         .step-result::-webkit-scrollbar-thumb { background: var(--border2); }
+
+        /* Agent badge inside step (shows which sub-agent ran each step) */
+        .step-agent {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.6rem;
+            color: var(--accent);
+            opacity: 0.65;
+            margin-left: 0.15rem;
+        }
     </style>
 </head>
 <body>
@@ -568,7 +577,7 @@
 
         <div id="loading" class="loading" style="display:none;">
             <div class="spinner"></div>
-            <span>running…</span>
+            <span id="loading-label">running…</span>
         </div>
 
         <div class="input-area">
@@ -585,6 +594,7 @@
         const messagesEl = document.getElementById('messages');
         const emptyState = document.getElementById('empty-state');
         const loadingEl = document.getElementById('loading');
+        const loadingLabel = document.getElementById('loading-label');
         const form = document.getElementById('form');
         const input = document.getElementById('task-input');
         const submitBtn = document.getElementById('submit-btn');
@@ -621,26 +631,63 @@
             if (!task) return;
 
             emptyState.style.display = 'none';
-
             addUserMessage(task);
             input.value = '';
             submitBtn.disabled = true;
+            loadingLabel.textContent = 'routing…';
             loadingEl.style.display = 'flex';
             scrollToBottom();
 
+            const { div: agentDiv, appendStep, finalize } = createLiveAgentMessage();
+            messagesEl.appendChild(agentDiv);
+
             try {
-                const res = await fetch(`${API}/run`, {
+                const res = await fetch(`${API}/stream`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ task }),
                 });
-                const data = await res.json();
-                addAgentMessage(data);
+
+                if (!res.ok) {
+                    const errData = await res.json().catch(() => ({}));
+                    throw new Error(errData.detail || `HTTP ${res.status}`);
+                }
+
+                const reader = res.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop(); // keep any partial final line
+                    for (const line of lines) {
+                        if (!line.startsWith('data: ')) continue;
+                        let event;
+                        try { event = JSON.parse(line.slice(6)); } catch { continue; }
+
+                        if (event.type === 'phase') {
+                            loadingLabel.textContent = event.label || event.phase;
+                        } else if (event.type === 'step') {
+                            appendStep(event.step, event.agent);
+                            scrollToBottom();
+                        } else if (event.type === 'retry') {
+                            loadingLabel.textContent = `⚠ retrying LLM (attempt ${event.attempt}/5)…`;
+                        } else if (event.type === 'done') {
+                            finalize(event.result);
+                        } else if (event.type === 'error') {
+                            finalize({ answer: `Error: ${event.message}`, steps: [], total_tokens: { input: 0, output: 0 }, model: '?', total_steps: 0 });
+                        }
+                    }
+                }
             } catch (err) {
-                addAgentMessage({ answer: `Error: ${err.message}`, steps: [], total_tokens: { input: 0, output: 0 }, model: '?' });
+                finalize({ answer: `Error: ${err.message}`, steps: [], total_tokens: { input: 0, output: 0 }, model: '?', total_steps: 0 });
             } finally {
                 submitBtn.disabled = false;
                 loadingEl.style.display = 'none';
+                loadingLabel.textContent = 'running…';
                 scrollToBottom();
             }
         });
@@ -652,64 +699,93 @@
             messagesEl.appendChild(div);
         }
 
-        function addAgentMessage(data) {
+        function createLiveAgentMessage() {
             const div = document.createElement('div');
             div.className = 'message agent';
 
-            let stepsHtml = '';
-            if (data.steps && data.steps.length > 0) {
-                const stepsItems = data.steps.map(s => {
-                    const argsStr = Object.entries(s.args || {}).map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`).join(', ');
-                    const isError = s.result && s.result.startsWith('ERROR');
-                    return `
-                    <div class="step">
-                        <div class="step-header">
-                            <span class="step-num">${String(s.step).padStart(2, '0')}</span>
-                            <span class="step-tool">${escapeHtml(s.tool)}</span>
-                            <span class="step-latency">${s.latency_ms}ms</span>
-                        </div>
-                        <div class="step-args">${escapeHtml(argsStr)}</div>
-                        <div class="step-result ${isError ? 'error' : ''}">${escapeHtml(s.result)}</div>
-                    </div>
-                `}).join('');
+            const bubble = document.createElement('div');
+            bubble.className = 'bubble';
+            div.appendChild(bubble);
 
-                stepsHtml = `
-                    <div class="steps">
-                        <div class="steps-header">trace — ${data.total_steps} step${data.total_steps > 1 ? 's' : ''}</div>
-                        ${stepsItems}
+            const answerEl = document.createElement('div');
+            answerEl.className = 'answer';
+            bubble.appendChild(answerEl);
+
+            const stepsEl = document.createElement('div');
+            stepsEl.className = 'steps';
+            stepsEl.style.display = 'none';
+            bubble.appendChild(stepsEl);
+
+            const stepsHeader = document.createElement('div');
+            stepsHeader.className = 'steps-header';
+            stepsHeader.textContent = 'trace — 0 steps';
+            stepsEl.appendChild(stepsHeader);
+
+            const metaEl = document.createElement('div');
+            metaEl.className = 'meta';
+            bubble.appendChild(metaEl);
+
+            let stepCount = 0;
+
+            function appendStep(s, agentName) {
+                stepCount++;
+                stepsEl.style.display = '';
+                stepsHeader.textContent = `trace — ${stepCount} step${stepCount > 1 ? 's' : ''}`;
+
+                const argsStr = Object.entries(s.args || {}).map(
+                    ([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`
+                ).join(', ');
+                const isError = s.result && s.result.startsWith('ERROR');
+                const agent = agentName || s.agent || '';
+
+                const stepEl = document.createElement('div');
+                stepEl.className = 'step';
+                stepEl.innerHTML = `
+                    <div class="step-header">
+                        <span class="step-num">${String(s.step).padStart(2, '0')}</span>
+                        ${agent ? `<span class="step-agent">${escapeHtml(agent)}</span>` : ''}
+                        <span class="step-tool">${escapeHtml(s.tool)}</span>
+                        <span class="step-latency">${s.latency_ms}ms</span>
                     </div>
+                    <div class="step-args">${escapeHtml(argsStr)}</div>
+                    <div class="step-result ${isError ? 'error' : ''}">${escapeHtml(s.result)}</div>
+                `;
+                stepsEl.appendChild(stepEl);
+            }
+
+            function finalize(data) {
+                let answerText = data.answer || '';
+                const fileRegex = /\[FILE:\s*\.\/data\/([^\]]+)\]/g;
+                const files = [];
+                let m;
+                while ((m = fileRegex.exec(data.answer || '')) !== null) files.push(m[1]);
+
+                if (files.length > 0) {
+                    answerText = answerText.replace(/\[FILE:\s*\.\/data\/[^\]]+\]/g, '').trim();
+                    const dlContainer = document.createElement('div');
+                    dlContainer.innerHTML = files.map(f =>
+                        `<a class="download-btn" href="${API}/download/${encodeURIComponent(f)}" target="_blank">↓ ${escapeHtml(f)}</a>`
+                    ).join(' ');
+                    bubble.insertBefore(dlContainer, stepsEl);
+                }
+
+                answerEl.textContent = answerText;
+
+                const totalSteps = data.total_steps || stepCount;
+                if (totalSteps > 0) {
+                    stepsEl.style.display = '';
+                    stepsHeader.textContent = `trace — ${totalSteps} step${totalSteps > 1 ? 's' : ''}`;
+                }
+
+                const tokens = data.total_tokens || { input: 0, output: 0 };
+                metaEl.innerHTML = `
+                    <span>${escapeHtml(data.model || '')}</span>
+                    <span>${(tokens.input || 0) + (tokens.output || 0)} tokens</span>
+                    <span>${totalSteps} steps</span>
                 `;
             }
 
-            let answerHtml = escapeHtml(data.answer);
-            let downloadHtml = '';
-            const fileRegex = /\[FILE:\s*\.\/data\/([^\]]+)\]/g;
-            const files = [];
-            let match;
-            while ((match = fileRegex.exec(data.answer)) !== null) {
-                files.push(match[1]);
-            }
-            if (files.length > 0) {
-                answerHtml = answerHtml.replace(/\[FILE:\s*\.\/data\/[^\]]+\]/g, '').trim();
-                downloadHtml = files.map(f =>
-                    `<a class="download-btn" href="${API}/download/${encodeURIComponent(f)}" target="_blank">↓ ${escapeHtml(f)}</a>`
-                ).join(' ');
-            }
-
-            const tokens = data.total_tokens || { input: 0, output: 0 };
-            div.innerHTML = `
-                <div class="bubble">
-                    <div class="answer">${answerHtml}</div>
-                    ${downloadHtml}
-                    ${stepsHtml}
-                    <div class="meta">
-                        <span>${data.model || ''}</span>
-                        <span>${tokens.input + tokens.output} tokens</span>
-                        <span>${data.total_steps || 0} steps</span>
-                    </div>
-                </div>
-            `;
-            messagesEl.appendChild(div);
+            return { div, appendStep, finalize };
         }
 
         function escapeHtml(str) {

@@ -9,18 +9,36 @@
 #   Budget per run (10 steps): ~180K tokens → ~5 concurrent runs/min within TPM
 # ─────────────────────────────────────────────────────────────
 llm:
-  model: gemini/gemini-2.5-flash  # <- swap this line
+  model: gemini/gemini-2.5-pro   # <- swap this line
   # model: gpt-4o                # OpenAI
   # model: gemini/gemini-1.5-pro # Google
   # model: ollama/llama3         # Local (no API key)
   # model: mistral/mistral-large # Mistral
   temperature: 0.0
-  max_tokens: 8192              # Gemini 2.5 Flash requires thinking; 8192 proven to work
-  thinking_budget: 8192         # Required for complex tool calls (Gemini returns 0 candidates without)
-
+  max_tokens: 16384
+  thinking_budget: 10000
 agent:
   max_steps: 10
   traces_dir: ./traces
+
+# ─────────────────────────────────────────────────────────────
+#  MULTI-AGENT ORCHESTRATOR
+#  Set use_orchestrator: false to revert to legacy single-agent mode
+# ─────────────────────────────────────────────────────────────
+agents:
+  use_orchestrator: true
+  supervisor:
+    max_tokens: 512          # Routing is a small JSON output
+  research:
+    max_steps: 5             # Shallow: 5, Deep: 8 (auto-adjusted)
+    max_tokens: 4096
+    model: gemini/gemini-2.5-flash  # Flash: ~4× faster for search/summarise; Pro reserved for code gen
+  doc_generator:
+    max_steps: 10
+    max_tokens: 16384        # Large budget for code generation
+  general:
+    max_steps: 8
+    max_tokens: 4096
 
 tools:
   read_file:

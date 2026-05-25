@@ -111,7 +111,7 @@ class ReActAgent:
     def __init__(self) -> None:
         self.cfg = get_config()
 
-    async def run(self, task: str) -> AgentResult:
+    async def run(self, task: str, on_event=None) -> AgentResult:
         """Execute a task using the ReAct loop."""
         run_id = str(uuid.uuid4())
         steps: list[AgentStep] = []

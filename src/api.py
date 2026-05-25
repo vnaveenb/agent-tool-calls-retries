@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import json
+import logging
 import time
 from collections import defaultdict
 from dataclasses import asdict
@@ -8,14 +10,18 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, field_validator
 
 from .config import get_config, reload_config
 from .agent import ReActAgent
+from .orchestrator import Orchestrator
 from .tools import list_tools
 from .tools.base import tool_def_to_litellm_schema
+
+# Configure logging so agent logs appear in uvicorn output
+logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
 app = FastAPI(title="Agent with Tool Calls + Retries", version="1.0.0")
 app.add_middleware(
@@ -84,9 +90,78 @@ async def run_task(req: RunRequest, request: Request):
     if not _check_rate_limit(client_ip):
         raise HTTPException(429, "Rate limit exceeded. Maximum 10 requests per minute.")
 
-    agent = ReActAgent()
-    result = await agent.run(req.task)
+    cfg = get_config()
+    if cfg.agents.use_orchestrator:
+        orchestrator = Orchestrator()
+        result = await orchestrator.run(req.task)
+    else:
+        # Legacy single-agent mode
+        agent = ReActAgent()
+        result = await agent.run(req.task)
+
     return asdict(result)
+
+
+@app.post("/stream")
+async def stream_task(req: RunRequest, request: Request):
+    """SSE endpoint — streams progress events as the agent works.
+
+    Event types sent as ``data: {json}\\n\\n``:
+      - ``{"type": "phase", "phase": str, "label": str}``
+      - ``{"type": "step",  "agent": str, "step": {...}}``
+      - ``{"type": "retry", "agent": str, "attempt": int, "error": str}``
+      - ``{"type": "done",  "result": {...}}``  — final payload
+      - ``{"type": "error", "message": str}``
+    """
+    client_ip = request.client.host if request.client else "unknown"
+    if not _check_rate_limit(client_ip):
+        raise HTTPException(429, "Rate limit exceeded. Maximum 10 requests per minute.")
+
+    queue: asyncio.Queue[dict] = asyncio.Queue()
+
+    async def produce() -> None:
+        def on_event(event: dict) -> None:
+            queue.put_nowait(event)
+
+        try:
+            cfg = get_config()
+            if cfg.agents.use_orchestrator:
+                orchestrator = Orchestrator()
+                result = await orchestrator.run(req.task, on_event=on_event)
+            else:
+                agent = ReActAgent()
+                result = await agent.run(req.task, on_event=on_event)
+            queue.put_nowait({"type": "done", "result": asdict(result)})
+        except Exception as exc:
+            logger.exception("[stream] agent error")
+            queue.put_nowait({"type": "error", "message": str(exc)})
+
+    async def generate():
+        producer = asyncio.create_task(produce())
+        try:
+            while True:
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=30.0)
+                except asyncio.TimeoutError:
+                    # Keep-alive comment — prevents nginx/browser timeout during long thinking
+                    yield ": keepalive\n\n"
+                    continue
+
+                yield f"data: {json.dumps(event)}\n\n"
+
+                if event["type"] in ("done", "error"):
+                    break
+        finally:
+            producer.cancel()
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",  # disable nginx response buffering
+        },
+    )
 
 
 @app.get("/trace/{run_id}")

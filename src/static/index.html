@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agent — Tool Calls + Retries</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg: #0a0c0f;
+            --surface: #0f1218;
+            --surface2: #161b24;
+            --border: #1e2530;
+            --border2: #252d3a;
+            --accent: #4ade80;
+            --accent-dim: rgba(74, 222, 128, 0.08);
+            --accent-dim2: rgba(74, 222, 128, 0.15);
+            --blue: #38bdf8;
+            --blue-dim: rgba(56, 189, 248, 0.1);
+            --amber: #fbbf24;
+            --red: #f87171;
+            --muted: #4a5568;
+            --muted2: #64748b;
+            --text: #c9d3e0;
+            --text-bright: #e8edf5;
+            --text-dim: #6b7a8d;
+        }
+
+        body {
+            font-family: 'IBM Plex Sans', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* Subtle scanline texture */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background: repeating-linear-gradient(
+                0deg,
+                transparent,
+                transparent 2px,
+                rgba(0,0,0,0.03) 2px,
+                rgba(0,0,0,0.03) 4px
+            );
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        header {
+            position: relative;
+            z-index: 10;
+            padding: 0 2rem;
+            height: 52px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--surface);
+            flex-shrink: 0;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .logo-mark {
+            width: 28px;
+            height: 28px;
+            border: 1.5px solid var(--accent);
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--accent);
+            letter-spacing: -0.5px;
+            flex-shrink: 0;
+        }
+
+        header h1 {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.78rem;
+            font-weight: 500;
+            color: var(--text-dim);
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+        }
+
+        header h1 span {
+            color: var(--text-bright);
+        }
+
+        .status {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.7rem;
+            color: var(--text-dim);
+        }
+
+        .status-pill {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            background: var(--accent-dim);
+            border: 1px solid rgba(74,222,128,0.2);
+            border-radius: 2rem;
+            padding: 0.2rem 0.6rem;
+            color: var(--accent);
+        }
+
+        .status-pill .dot {
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            background: var(--accent);
+            animation: pulse 2.5s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.35; }
+        }
+
+        .main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            max-width: 860px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 0 1.5rem 1.25rem;
+            overflow: hidden;
+            position: relative;
+            z-index: 1;
+        }
+
+        .messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1.5rem 0 0.5rem;
+            scrollbar-width: thin;
+            scrollbar-color: var(--border2) transparent;
+        }
+
+        .messages::-webkit-scrollbar { width: 4px; }
+        .messages::-webkit-scrollbar-track { background: transparent; }
+        .messages::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+        .message {
+            margin-bottom: 1.75rem;
+            animation: fadeUp 0.25s ease;
+        }
+
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* User message */
+        .message.user {
+            display: flex;
+            justify-content: flex-end;
+        }
+
+        .message.user .bubble {
+            background: var(--surface2);
+            border: 1px solid var(--border2);
+            border-radius: 2px 12px 12px 12px;
+            padding: 0.65rem 1rem;
+            max-width: 68%;
+            font-size: 0.88rem;
+            line-height: 1.55;
+            color: var(--text-bright);
+            position: relative;
+        }
+
+        .message.user .bubble::before {
+            content: '›';
+            position: absolute;
+            right: calc(100% + 0.5rem);
+            top: 0.6rem;
+            font-family: 'IBM Plex Mono', monospace;
+            color: var(--accent);
+            font-size: 1rem;
+        }
+
+        /* Agent message */
+        .message.agent .bubble {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-left: 2px solid var(--accent);
+            border-radius: 0 8px 8px 8px;
+            padding: 1rem 1.25rem;
+            max-width: 88%;
+            font-size: 0.88rem;
+            line-height: 1.65;
+        }
+
+        .message.agent .answer {
+            color: var(--text-bright);
+            font-size: 0.9rem;
+            line-height: 1.65;
+            margin-bottom: 0.5rem;
+        }
+
+        /* Steps / trace */
+        .steps {
+            border-top: 1px solid var(--border);
+            padding-top: 0.85rem;
+            margin-top: 0.85rem;
+        }
+
+        .steps-header {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.65rem;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 0.65rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .steps-header::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: var(--border);
+        }
+
+        .step {
+            padding: 0.6rem 0.75rem;
+            margin-bottom: 0.45rem;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            font-size: 0.8rem;
+            transition: border-color 0.15s;
+        }
+
+        .step:last-child { margin-bottom: 0; }
+        .step:hover { border-color: var(--border2); }
+
+        .step-header {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            margin-bottom: 0.4rem;
+        }
+
+        .step-num {
+            font-family: 'IBM Plex Mono', monospace;
+            color: var(--text-dim);
+            font-size: 0.68rem;
+            min-width: 1.2rem;
+        }
+
+        .step-tool {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.73rem;
+            font-weight: 600;
+            color: var(--accent);
+            background: var(--accent-dim);
+            border: 1px solid rgba(74,222,128,0.18);
+            padding: 0.1rem 0.45rem;
+            border-radius: 3px;
+            letter-spacing: 0.02em;
+        }
+
+        .step-latency {
+            margin-left: auto;
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.65rem;
+            color: var(--text-dim);
+            background: var(--surface2);
+            padding: 0.1rem 0.4rem;
+            border-radius: 3px;
+        }
+
+        .step-args {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.7rem;
+            color: var(--text-dim);
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 3px;
+            padding: 0.3rem 0.5rem;
+            margin-bottom: 0.35rem;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+            line-height: 1.5;
+        }
+
+        .step-result {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.72rem;
+            color: var(--muted2);
+            line-height: 1.5;
+            white-space: pre-wrap;
+            word-break: break-word;
+            max-height: 110px;
+            overflow-y: auto;
+            padding: 0.1rem 0;
+        }
+
+        .step-result.error {
+            color: var(--red);
+        }
+
+        .meta {
+            display: flex;
+            gap: 1rem;
+            margin-top: 0.85rem;
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.67rem;
+            color: var(--text-dim);
+            border-top: 1px solid var(--border);
+            padding-top: 0.6rem;
+        }
+
+        .meta span {
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+        }
+
+        .meta span::before {
+            content: '·';
+            color: var(--muted);
+        }
+
+        .meta span:first-child::before { display: none; }
+
+        /* Input area */
+        .input-area {
+            padding: 0.85rem 0 0;
+            border-top: 1px solid var(--border);
+            flex-shrink: 0;
+        }
+
+        .input-row {
+            display: flex;
+            gap: 0.6rem;
+            align-items: center;
+        }
+
+        .input-prefix {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.88rem;
+            color: var(--accent);
+            flex-shrink: 0;
+            padding-bottom: 1px;
+        }
+
+        .input-row input {
+            flex: 1;
+            background: var(--surface);
+            border: 1px solid var(--border2);
+            border-radius: 4px;
+            padding: 0.72rem 1rem;
+            color: var(--text-bright);
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.83rem;
+            outline: none;
+            transition: border-color 0.15s, box-shadow 0.15s;
+        }
+
+        .input-row input:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(74,222,128,0.08);
+        }
+
+        .input-row input::placeholder {
+            color: var(--muted);
+        }
+
+        .input-row button {
+            background: var(--accent);
+            color: #0a0c0f;
+            border: none;
+            border-radius: 4px;
+            padding: 0.72rem 1.2rem;
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.78rem;
+            font-weight: 600;
+            letter-spacing: 0.04em;
+            cursor: pointer;
+            transition: background 0.15s, transform 0.1s;
+            text-transform: uppercase;
+            flex-shrink: 0;
+        }
+
+        .input-row button:hover:not(:disabled) {
+            background: #86efac;
+        }
+
+        .input-row button:active:not(:disabled) {
+            transform: scale(0.97);
+        }
+
+        .input-row button:disabled {
+            opacity: 0.35;
+            cursor: not-allowed;
+        }
+
+        /* Loading */
+        .loading {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            color: var(--text-dim);
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.75rem;
+            padding: 0.5rem 0;
+            letter-spacing: 0.03em;
+        }
+
+        .loading .spinner {
+            width: 14px;
+            height: 14px;
+            border: 1.5px solid var(--border2);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+            flex-shrink: 0;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Tools bar */
+        .tools-bar {
+            display: flex;
+            gap: 0.4rem;
+            padding: 0.5rem 0 0;
+            flex-wrap: wrap;
+        }
+
+        .tools-bar .chip {
+            background: transparent;
+            border: 1px solid var(--border2);
+            border-radius: 3px;
+            padding: 0.2rem 0.55rem;
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.65rem;
+            color: var(--text-dim);
+            letter-spacing: 0.03em;
+            text-transform: lowercase;
+            transition: border-color 0.15s, color 0.15s;
+            cursor: default;
+        }
+
+        .tools-bar .chip:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        /* Empty state */
+        .empty-state {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            justify-content: center;
+            padding: 1rem 0;
+        }
+
+        .empty-state .es-label {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            color: var(--text-dim);
+            margin-bottom: 0.75rem;
+        }
+
+        .empty-state h2 {
+            font-family: 'IBM Plex Sans', sans-serif;
+            font-size: 1.35rem;
+            font-weight: 300;
+            color: var(--text-bright);
+            line-height: 1.4;
+            margin-bottom: 0.5rem;
+            letter-spacing: -0.02em;
+        }
+
+        .empty-state h2 em {
+            font-style: normal;
+            color: var(--accent);
+        }
+
+        .empty-state p {
+            font-size: 0.83rem;
+            color: var(--text-dim);
+            line-height: 1.6;
+            max-width: 420px;
+            margin-bottom: 1.25rem;
+        }
+
+        /* Download button */
+        .download-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            background: transparent;
+            color: var(--accent);
+            border: 1px solid rgba(74,222,128,0.3);
+            border-radius: 4px;
+            padding: 0.45rem 0.85rem;
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.72rem;
+            font-weight: 500;
+            cursor: pointer;
+            text-decoration: none;
+            margin-top: 0.75rem;
+            transition: background 0.15s, border-color 0.15s;
+        }
+
+        .download-btn:hover {
+            background: var(--accent-dim);
+            border-color: rgba(74,222,128,0.55);
+        }
+
+        /* Scrollbar for step results */
+        .step-result::-webkit-scrollbar { width: 3px; }
+        .step-result::-webkit-scrollbar-thumb { background: var(--border2); }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="header-left">
+            <div class="logo-mark">AG</div>
+            <h1><span>agent</span> / tool-calls + retries</h1>
+        </div>
+        <div class="status">
+            <div class="status-pill">
+                <div class="dot"></div>
+                <span id="model-name">loading…</span>
+            </div>
+        </div>
+    </header>
+
+    <div class="main">
+        <div class="messages" id="messages">
+            <div class="empty-state" id="empty-state">
+                <div class="es-label">ready</div>
+                <h2>Ask the <em>agent</em> anything.</h2>
+                <p>Chains tools as needed — math, web search, URL fetching, file reads, Python execution — with automatic retries on failure.</p>
+                <div class="tools-bar" id="tools-bar"></div>
+            </div>
+        </div>
+
+        <div id="loading" class="loading" style="display:none;">
+            <div class="spinner"></div>
+            <span>running…</span>
+        </div>
+
+        <div class="input-area">
+            <form class="input-row" id="form">
+                <span class="input-prefix">$</span>
+                <input type="text" id="task-input" placeholder="e.g. what is (15 + 27) * 3?" autocomplete="off" spellcheck="false" />
+                <button type="submit" id="submit-btn">run</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const API = '';
+        const messagesEl = document.getElementById('messages');
+        const emptyState = document.getElementById('empty-state');
+        const loadingEl = document.getElementById('loading');
+        const form = document.getElementById('form');
+        const input = document.getElementById('task-input');
+        const submitBtn = document.getElementById('submit-btn');
+        const modelName = document.getElementById('model-name');
+        const toolsBar = document.getElementById('tools-bar');
+
+        async function init() {
+            try {
+                const [health, tools] = await Promise.all([
+                    fetch(`${API}/health`).then(r => r.json()),
+                    fetch(`${API}/tools`).then(r => r.json()),
+                ]);
+                modelName.textContent = health.model;
+                tools.forEach(t => {
+                    const chip = document.createElement('span');
+                    chip.className = 'chip';
+                    chip.textContent = t.name;
+                    chip.title = t.description;
+                    toolsBar.appendChild(chip);
+                });
+            } catch (e) {
+                modelName.textContent = 'offline';
+                document.querySelector('.dot').style.background = '#f87171';
+                document.querySelector('.status-pill').style.borderColor = 'rgba(248,113,113,0.3)';
+                document.querySelector('.status-pill').style.background = 'rgba(248,113,113,0.08)';
+                document.querySelector('.status-pill').style.color = '#f87171';
+            }
+        }
+        init();
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const task = input.value.trim();
+            if (!task) return;
+
+            emptyState.style.display = 'none';
+
+            addUserMessage(task);
+            input.value = '';
+            submitBtn.disabled = true;
+            loadingEl.style.display = 'flex';
+            scrollToBottom();
+
+            try {
+                const res = await fetch(`${API}/run`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ task }),
+                });
+                const data = await res.json();
+                addAgentMessage(data);
+            } catch (err) {
+                addAgentMessage({ answer: `Error: ${err.message}`, steps: [], total_tokens: { input: 0, output: 0 }, model: '?' });
+            } finally {
+                submitBtn.disabled = false;
+                loadingEl.style.display = 'none';
+                scrollToBottom();
+            }
+        });
+
+        function addUserMessage(text) {
+            const div = document.createElement('div');
+            div.className = 'message user';
+            div.innerHTML = `<div class="bubble">${escapeHtml(text)}</div>`;
+            messagesEl.appendChild(div);
+        }
+
+        function addAgentMessage(data) {
+            const div = document.createElement('div');
+            div.className = 'message agent';
+
+            let stepsHtml = '';
+            if (data.steps && data.steps.length > 0) {
+                const stepsItems = data.steps.map(s => {
+                    const argsStr = Object.entries(s.args || {}).map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`).join(', ');
+                    const isError = s.result && s.result.startsWith('ERROR');
+                    return `
+                    <div class="step">
+                        <div class="step-header">
+                            <span class="step-num">${String(s.step).padStart(2, '0')}</span>
+                            <span class="step-tool">${escapeHtml(s.tool)}</span>
+                            <span class="step-latency">${s.latency_ms}ms</span>
+                        </div>
+                        <div class="step-args">${escapeHtml(argsStr)}</div>
+                        <div class="step-result ${isError ? 'error' : ''}">${escapeHtml(s.result)}</div>
+                    </div>
+                `}).join('');
+
+                stepsHtml = `
+                    <div class="steps">
+                        <div class="steps-header">trace — ${data.total_steps} step${data.total_steps > 1 ? 's' : ''}</div>
+                        ${stepsItems}
+                    </div>
+                `;
+            }
+
+            let answerHtml = escapeHtml(data.answer);
+            let downloadHtml = '';
+            const fileRegex = /\[FILE:\s*\.\/data\/([^\]]+)\]/g;
+            const files = [];
+            let match;
+            while ((match = fileRegex.exec(data.answer)) !== null) {
+                files.push(match[1]);
+            }
+            if (files.length > 0) {
+                answerHtml = answerHtml.replace(/\[FILE:\s*\.\/data\/[^\]]+\]/g, '').trim();
+                downloadHtml = files.map(f =>
+                    `<a class="download-btn" href="${API}/download/${encodeURIComponent(f)}" target="_blank">↓ ${escapeHtml(f)}</a>`
+                ).join(' ');
+            }
+
+            const tokens = data.total_tokens || { input: 0, output: 0 };
+            div.innerHTML = `
+                <div class="bubble">
+                    <div class="answer">${answerHtml}</div>
+                    ${downloadHtml}
+                    ${stepsHtml}
+                    <div class="meta">
+                        <span>${data.model || ''}</span>
+                        <span>${tokens.input + tokens.output} tokens</span>
+                        <span>${data.total_steps || 0} steps</span>
+                    </div>
+                </div>
+            `;
+            messagesEl.appendChild(div);
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        function truncate(str, max) {
+            if (!str) return '';
+            return str.length > max ? str.slice(0, max) + '...' : str;
+        }
+
+        function scrollToBottom() {
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+        }
+
+        input.focus();
+    </script>
+</body>
+</html>

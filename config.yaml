@@ -1,0 +1,29 @@
+# ─────────────────────────────────────────────────────────────
+#  HOT-SWAP: change `model` here, then POST /reload-config
+#  No code changes required. Restart not needed via the API.
+# ─────────────────────────────────────────────────────────────
+# Rate limits (Gemini 2.5 Flash free tier):
+#   RPM: 1,000 | TPM: 1,000,000 | RPD: 10,000
+#   Worst-case per run: max_steps × retries = 10 × 3 = 30 requests
+#   Budget per step: ~input(2000) + thinking(8192) + output(8192) ≈ 18K tokens
+#   Budget per run (10 steps): ~180K tokens → ~5 concurrent runs/min within TPM
+# ─────────────────────────────────────────────────────────────
+llm:
+  model: gemini/gemini-2.5-flash  # <- swap this line
+  # model: gpt-4o                # OpenAI
+  # model: gemini/gemini-1.5-pro # Google
+  # model: ollama/llama3         # Local (no API key)
+  # model: mistral/mistral-large # Mistral
+  temperature: 0.0
+  max_tokens: 8192              # Gemini 2.5 Flash requires thinking; 8192 proven to work
+  thinking_budget: 8192         # Required for complex tool calls (Gemini returns 0 candidates without)
+
+agent:
+  max_steps: 10
+  traces_dir: ./traces
+
+tools:
+  read_file:
+    sandbox_dir: ./data
+  python_repl:
+    timeout_seconds: 30          # Bumped: PPT/PDF gen can be slow

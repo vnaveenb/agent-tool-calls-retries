@@ -17,18 +17,27 @@ def _search_tavily(query: str) -> ToolResult | None:
     try:
         from tavily import TavilyClient
         client = TavilyClient(api_key=api_key)
-        response = client.search(query, max_results=5, include_answer=True)
+        response = client.search(
+            query,
+            max_results=5,
+            include_answer=True,
+            search_depth="advanced",   # deeper crawl — better for recent events
+            include_raw_content=False, # raw_content is huge; content snippets are enough
+        )
 
         formatted = []
-        # Tavily provides a direct AI-generated answer
+        # Tavily provides a direct AI-generated answer — flag it clearly so the agent
+        # can judge whether it actually answers the question or is tangentially related.
         if response.get("answer"):
-            formatted.append(f"**Answer**: {response['answer']}\n")
+            formatted.append(f"**Tavily Answer** (verify against results below): {response['answer']}\n")
 
         for i, r in enumerate(response.get("results", []), 1):
             title = r.get("title", "No title")
             content = r.get("content", "No snippet")
             url = r.get("url", "")
-            formatted.append(f"{i}. {title}\n   {content}\n   {url}")
+            published = r.get("published_date", "")
+            date_str = f" [{published}]" if published else ""
+            formatted.append(f"{i}. {title}{date_str}\n   {content}\n   {url}")
 
         if formatted:
             return ToolResult(success=True, output="\n\n".join(formatted))

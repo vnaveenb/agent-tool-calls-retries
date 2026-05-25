@@ -53,7 +53,7 @@ def _check_rate_limit(client_ip: str) -> bool:
 
 # ── Request/Response models ───────────────────────────────────
 
-_MAX_TASK_LENGTH = 2000
+_MAX_TASK_LENGTH = 25_000  # supports large data pastes for document generation
 
 
 class RunRequest(BaseModel):

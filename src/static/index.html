@@ -358,7 +358,7 @@
         .input-row {
             display: flex;
             gap: 0.6rem;
-            align-items: center;
+            align-items: flex-end;
         }
 
         .input-prefix {
@@ -369,7 +369,7 @@
             padding-bottom: 1px;
         }
 
-        .input-row input {
+        .input-row textarea {
             flex: 1;
             background: var(--surface);
             border: 1px solid var(--border2);
@@ -380,16 +380,30 @@
             font-size: 0.83rem;
             outline: none;
             transition: border-color 0.15s, box-shadow 0.15s;
+            resize: none;
+            min-height: 2.6rem;
+            max-height: 14rem;
+            overflow-y: auto;
+            line-height: 1.5;
         }
 
-        .input-row input:focus {
+        .input-row textarea:focus {
             border-color: var(--accent);
             box-shadow: 0 0 0 3px rgba(74,222,128,0.08);
         }
 
-        .input-row input::placeholder {
+        .input-row textarea::placeholder {
             color: var(--muted);
         }
+
+        .char-counter {
+            font-size: 0.7rem;
+            color: var(--muted);
+            text-align: right;
+            padding-top: 0.25rem;
+            display: none;
+        }
+        .char-counter.warn { color: #f87171; }
 
         .input-row button {
             background: var(--accent);
@@ -583,9 +597,10 @@
         <div class="input-area">
             <form class="input-row" id="form">
                 <span class="input-prefix">$</span>
-                <input type="text" id="task-input" placeholder="e.g. what is (15 + 27) * 3?" autocomplete="off" spellcheck="false" />
+                <textarea id="task-input" rows="1" placeholder="Ask anything, or paste data to generate a document… (Enter to submit, Shift+Enter for newline)" autocomplete="off" spellcheck="false"></textarea>
                 <button type="submit" id="submit-btn">run</button>
             </form>
+            <div class="char-counter" id="char-counter"></div>
         </div>
     </div>
 
@@ -598,6 +613,29 @@
         const form = document.getElementById('form');
         const input = document.getElementById('task-input');
         const submitBtn = document.getElementById('submit-btn');
+        const charCounter = document.getElementById('char-counter');
+        const MAX_CHARS = 25000;
+
+        function autoResize() {
+            input.style.height = 'auto';
+            input.style.height = Math.min(input.scrollHeight, 224) + 'px';
+            const len = input.value.length;
+            if (len > 500) {
+                charCounter.style.display = 'block';
+                charCounter.textContent = `${len.toLocaleString()} / ${MAX_CHARS.toLocaleString()} chars`;
+                charCounter.classList.toggle('warn', len > MAX_CHARS * 0.9);
+            } else {
+                charCounter.style.display = 'none';
+            }
+        }
+        input.addEventListener('input', autoResize);
+
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                form.requestSubmit();
+            }
+        });
         const modelName = document.getElementById('model-name');
         const toolsBar = document.getElementById('tools-bar');
 
@@ -633,6 +671,8 @@
             emptyState.style.display = 'none';
             addUserMessage(task);
             input.value = '';
+            input.style.height = 'auto';
+            charCounter.style.display = 'none';
             submitBtn.disabled = true;
             loadingLabel.textContent = 'routing…';
             loadingEl.style.display = 'flex';

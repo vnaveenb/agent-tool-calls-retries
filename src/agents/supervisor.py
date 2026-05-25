@@ -55,8 +55,13 @@ Output format — respond with ONLY a JSON object (no markdown, no explanation):
 
 Rules for the JSON:
 - "format": set when document generation is needed, null otherwise
-- "research_queries": suggested search queries for the research agent (1-3 queries). ALWAYS include the current year ({year}) in queries about recent/current events. Never use outdated years.
-- "depth": "shallow" for simple lookups (1 search), "deep" for comprehensive research (multiple searches + page fetches)
+- "research_queries": suggested search queries for the research agent (1-3 queries).
+  - ALWAYS include the current year ({year}) in queries about recent/current events. Never use outdated years.
+  - For sports/news/results queries: generate MULTIPLE angles to distinguish results from schedules.
+    Example for "IPL last week": ["IPL 2026 match results scores last week", "IPL 2026 points table standings May {year}", "IPL 2026 week 8 winners scorecard"]
+  - Never generate only one query for sports, news, or events — always include a results/scores variant and a standings/summary variant.
+- "depth": "shallow" for simple lookups (1 search), "deep" for comprehensive research (multiple searches + page fetches).
+  - Always use "deep" for sports results, recent news, or any topic where the user says "last week", "recent", "latest", "results", or "scores".
 """
 
 
@@ -168,14 +173,31 @@ class SupervisorAgent:
         # Generate research queries from the task
         research_queries = None
         if needs_research:
-            # Simple heuristic: use the task itself as query with current year
-            research_queries = [f"{task} {year}"]
+            is_sports_news = any(kw in task_lower for kw in (
+                "ipl", "match", "score", "result", "winner", "cricket",
+                "football", "soccer", "sports", "news", "stock", "weather",
+            ))
+            if is_sports_news:
+                # Generate multiple angles: results + standings + summary
+                research_queries = [
+                    f"{task} results scores {year}",
+                    f"{task} standings summary {year}",
+                ]
+            else:
+                research_queries = [f"{task} {year}"]
 
-        logger.info(f"[supervisor] Keyword fallback: intent={intent}, format={fmt}")
+        is_sports_news = any(kw in task_lower for kw in (
+            "ipl", "match", "score", "result", "winner", "cricket",
+            "football", "soccer", "sports", "news", "stock", "weather",
+            "last week", "recent", "latest",
+        ))
+        depth = "deep" if (needs_research and needs_doc) or is_sports_news else "shallow"
+
+        logger.info(f"[supervisor] Keyword fallback: intent={intent}, format={fmt}, depth={depth}")
         return RoutingPlan(
             intent=intent,
             format=fmt,
             research_queries=research_queries,
-            depth="deep" if needs_research and needs_doc else "shallow",
-            reasoning=f"Keyword fallback — LLM routing failed",
+            depth=depth,
+            reasoning="Keyword fallback — LLM routing failed",
         )

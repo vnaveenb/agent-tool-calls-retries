@@ -3,7 +3,9 @@
     "allow": [
       "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\Administrator\\\\Desktop\\\\RAG Portfolio\\\\projects\\\\04-agent-tool-calls-retries\" -Recurse -Force)",
       "Bash(Select-Object -First 50)",
-      "Bash(Format-Table FullName)"
+      "Bash(Format-Table FullName)",
+      "Bash(Select-Object FullName)",
+      "Bash(Sort-Object FullName)"
     ]
   }
 }

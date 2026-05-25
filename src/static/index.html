@@ -348,6 +348,42 @@
 
         .meta span:first-child::before { display: none; }
 
+        /* Framework selector */
+        .framework-selector {
+            display: flex;
+            gap: 0.3rem;
+            margin-bottom: 0.55rem;
+        }
+        .fw-btn {
+            background: none;
+            border: 1px solid var(--border2);
+            color: var(--muted);
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.7rem;
+            padding: 0.2rem 0.6rem;
+            border-radius: 3px;
+            cursor: pointer;
+            transition: color 0.12s, border-color 0.12s, background 0.12s;
+            letter-spacing: 0.02em;
+        }
+        .fw-btn:hover { color: var(--text-bright); border-color: var(--text); }
+        .fw-btn.active {
+            background: var(--accent);
+            color: #0a0c0f;
+            border-color: var(--accent);
+            font-weight: 600;
+        }
+        .fw-badge {
+            font-size: 0.65rem;
+            font-family: 'IBM Plex Mono', monospace;
+            background: rgba(74,222,128,0.12);
+            color: var(--accent);
+            border: 1px solid rgba(74,222,128,0.25);
+            border-radius: 3px;
+            padding: 0.05rem 0.4rem;
+            letter-spacing: 0.05em;
+        }
+
         /* Input area */
         .input-area {
             padding: 0.85rem 0 0;
@@ -563,6 +599,186 @@
             opacity: 0.65;
             margin-left: 0.15rem;
         }
+
+        /* Settings gear button */
+        .settings-btn {
+            background: none;
+            border: 1px solid var(--border2);
+            border-radius: 4px;
+            color: var(--text-dim);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px;
+            height: 28px;
+            font-size: 0.9rem;
+            transition: color 0.15s, border-color 0.15s;
+            position: relative;
+            margin-left: 0.5rem;
+            flex-shrink: 0;
+        }
+        .settings-btn:hover { color: var(--text-bright); border-color: var(--text-dim); }
+        .settings-badge {
+            display: none;
+            position: absolute;
+            top: -3px;
+            right: -3px;
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: var(--amber);
+            border: 1.5px solid var(--surface);
+        }
+
+        /* Modal overlay */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.65);
+            z-index: 100;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(2px);
+        }
+        .modal {
+            background: var(--surface);
+            border: 1px solid var(--border2);
+            border-radius: 6px;
+            width: 100%;
+            max-width: 480px;
+            margin: 1rem;
+            overflow: hidden;
+        }
+        .modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1rem 1.25rem 0.85rem;
+            border-bottom: 1px solid var(--border);
+        }
+        .modal-title {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-bright);
+            letter-spacing: 0.04em;
+        }
+        .modal-close {
+            background: none;
+            border: none;
+            color: var(--text-dim);
+            cursor: pointer;
+            font-size: 1rem;
+            line-height: 1;
+            padding: 0.1rem 0.3rem;
+            border-radius: 3px;
+            transition: color 0.15s;
+        }
+        .modal-close:hover { color: var(--text-bright); }
+        .modal-desc {
+            padding: 0.75rem 1.25rem 0;
+            font-size: 0.78rem;
+            color: var(--text-dim);
+            line-height: 1.55;
+        }
+        .modal-section {
+            padding: 0.85rem 1.25rem 0.25rem;
+        }
+        .modal-section-label {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.63rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--text-dim);
+            margin-bottom: 0.55rem;
+        }
+        .key-row {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 0.45rem;
+        }
+        .key-label {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.72rem;
+            color: var(--text);
+            width: 120px;
+            flex-shrink: 0;
+        }
+        .key-chip {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.6rem;
+            font-weight: 600;
+            padding: 0.1rem 0.35rem;
+            border-radius: 3px;
+            letter-spacing: 0.04em;
+            width: 58px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+        .key-chip.env     { background: rgba(74,222,128,0.12); color: var(--accent); border: 1px solid rgba(74,222,128,0.25); }
+        .key-chip.session { background: rgba(56,189,248,0.12); color: var(--blue);   border: 1px solid rgba(56,189,248,0.25); }
+        .key-chip.none    { background: transparent; color: var(--muted); border: 1px solid var(--border2); }
+        .key-input {
+            flex: 1;
+            background: var(--bg);
+            border: 1px solid var(--border2);
+            border-radius: 3px;
+            padding: 0.35rem 0.6rem;
+            color: var(--text-bright);
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.72rem;
+            outline: none;
+            transition: border-color 0.15s;
+            min-width: 0;
+        }
+        .key-input:focus { border-color: var(--accent); }
+        .key-input:disabled { opacity: 0.45; cursor: not-allowed; }
+        .key-clear {
+            background: none;
+            border: 1px solid var(--border2);
+            border-radius: 3px;
+            color: var(--muted2);
+            cursor: pointer;
+            font-size: 0.72rem;
+            padding: 0.2rem 0.45rem;
+            line-height: 1;
+            transition: color 0.15s, border-color 0.15s;
+            flex-shrink: 0;
+        }
+        .key-clear:hover { color: var(--red); border-color: var(--red); }
+        .modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 0.5rem;
+            padding: 0.85rem 1.25rem 1rem;
+            border-top: 1px solid var(--border);
+            margin-top: 0.5rem;
+        }
+        .modal-btn {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.73rem;
+            font-weight: 600;
+            letter-spacing: 0.04em;
+            padding: 0.45rem 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .modal-btn.cancel {
+            background: none;
+            border: 1px solid var(--border2);
+            color: var(--text-dim);
+        }
+        .modal-btn.cancel:hover { color: var(--text-bright); border-color: var(--text-dim); }
+        .modal-btn.save {
+            background: var(--accent);
+            border: 1px solid var(--accent);
+            color: #0a0c0f;
+        }
+        .modal-btn.save:hover { background: #86efac; }
     </style>
 </head>
 <body>
@@ -576,6 +792,10 @@
                 <div class="dot"></div>
                 <span id="model-name">loading…</span>
             </div>
+            <button class="settings-btn" id="settings-btn" title="Configure API keys">
+                ⚙
+                <span class="settings-badge" id="settings-badge"></span>
+            </button>
         </div>
     </header>
 
@@ -595,6 +815,12 @@
         </div>
 
         <div class="input-area">
+            <div class="framework-selector" id="framework-selector">
+                <button type="button" class="fw-btn active" data-fw="custom" title="Custom ReAct orchestrator with SSE streaming">Custom</button>
+                <button type="button" class="fw-btn" data-fw="langgraph" title="LangGraph StateGraph — declarative graph routing">LangGraph</button>
+                <button type="button" class="fw-btn" data-fw="crewai" title="CrewAI — role-based crew with dynamic task composition">CrewAI</button>
+                <button type="button" class="fw-btn" data-fw="a2a" title="Google A2A protocol — JSON-RPC 2.0 task endpoint">A2A</button>
+            </div>
             <form class="input-row" id="form">
                 <span class="input-prefix">$</span>
                 <textarea id="task-input" rows="1" placeholder="Ask anything, or paste data to generate a document… (Enter to submit, Shift+Enter for newline)" autocomplete="off" spellcheck="false"></textarea>
@@ -604,8 +830,188 @@
         </div>
     </div>
 
+    <!-- Settings Modal -->
+    <div class="modal-overlay" id="settings-modal">
+        <div class="modal">
+            <div class="modal-header">
+                <span class="modal-title">API Keys</span>
+                <button class="modal-close" id="modal-close-btn">✕</button>
+            </div>
+            <p class="modal-desc">Keys are stored in your browser session only — cleared when you close the tab. They are sent with each request but never logged or persisted by the server.</p>
+
+            <div class="modal-section">
+                <div class="modal-section-label">LLM Providers</div>
+                <div class="key-row">
+                    <span class="key-label">Gemini</span>
+                    <span class="key-chip none" id="key-chip-GEMINI_API_KEY">—</span>
+                    <input class="key-input" id="key-input-GEMINI_API_KEY" type="password" placeholder="Not configured" autocomplete="off">
+                    <button class="key-clear" id="key-clear-GEMINI_API_KEY" style="display:none" title="Clear saved key">×</button>
+                </div>
+                <div class="key-row">
+                    <span class="key-label">OpenAI</span>
+                    <span class="key-chip none" id="key-chip-OPENAI_API_KEY">—</span>
+                    <input class="key-input" id="key-input-OPENAI_API_KEY" type="password" placeholder="Not configured" autocomplete="off">
+                    <button class="key-clear" id="key-clear-OPENAI_API_KEY" style="display:none" title="Clear saved key">×</button>
+                </div>
+                <div class="key-row">
+                    <span class="key-label">Anthropic</span>
+                    <span class="key-chip none" id="key-chip-ANTHROPIC_API_KEY">—</span>
+                    <input class="key-input" id="key-input-ANTHROPIC_API_KEY" type="password" placeholder="Not configured" autocomplete="off">
+                    <button class="key-clear" id="key-clear-ANTHROPIC_API_KEY" style="display:none" title="Clear saved key">×</button>
+                </div>
+                <div class="key-row">
+                    <span class="key-label">Mistral</span>
+                    <span class="key-chip none" id="key-chip-MISTRAL_API_KEY">—</span>
+                    <input class="key-input" id="key-input-MISTRAL_API_KEY" type="password" placeholder="Not configured" autocomplete="off">
+                    <button class="key-clear" id="key-clear-MISTRAL_API_KEY" style="display:none" title="Clear saved key">×</button>
+                </div>
+            </div>
+
+            <div class="modal-section">
+                <div class="modal-section-label">Search Providers</div>
+                <div class="key-row">
+                    <span class="key-label">Tavily</span>
+                    <span class="key-chip none" id="key-chip-TAVILY_API_KEY">—</span>
+                    <input class="key-input" id="key-input-TAVILY_API_KEY" type="password" placeholder="Not configured" autocomplete="off">
+                    <button class="key-clear" id="key-clear-TAVILY_API_KEY" style="display:none" title="Clear saved key">×</button>
+                </div>
+                <div class="key-row">
+                    <span class="key-label">Serper</span>
+                    <span class="key-chip none" id="key-chip-SERPER_API_KEY">—</span>
+                    <input class="key-input" id="key-input-SERPER_API_KEY" type="password" placeholder="Not configured" autocomplete="off">
+                    <button class="key-clear" id="key-clear-SERPER_API_KEY" style="display:none" title="Clear saved key">×</button>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button class="modal-btn cancel" id="modal-cancel-btn">Cancel</button>
+                <button class="modal-btn save" id="modal-save-btn">Save</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         const API = '';
+
+        // ── API key session storage ───────────────────────────────
+        const KEY_HEADER_MAP = {
+            GEMINI_API_KEY:    'x-gemini-api-key',
+            OPENAI_API_KEY:    'x-openai-api-key',
+            ANTHROPIC_API_KEY: 'x-anthropic-api-key',
+            MISTRAL_API_KEY:   'x-mistral-api-key',
+            TAVILY_API_KEY:    'x-tavily-api-key',
+            SERPER_API_KEY:    'x-serper-api-key',
+        };
+        const ALL_KEYS = Object.keys(KEY_HEADER_MAP);
+
+        let serverKeyStatus = {};
+
+        function getSessionKeys() {
+            try { return JSON.parse(sessionStorage.getItem('agentApiKeys') || '{}'); }
+            catch { return {}; }
+        }
+
+        function saveSessionKeys(keys) {
+            sessionStorage.setItem('agentApiKeys', JSON.stringify(keys));
+        }
+
+        function apiFetch(url, init = {}) {
+            const keys = getSessionKeys();
+            const extra = {};
+            for (const [envKey, header] of Object.entries(KEY_HEADER_MAP)) {
+                if (keys[envKey]) extra[header] = keys[envKey];
+            }
+            init.headers = { ...(init.headers || {}), ...extra };
+            return fetch(url, init);
+        }
+
+        function getKeyStatus(envKey) {
+            if (serverKeyStatus[envKey]?.status === 'env') return 'env';
+            const keys = getSessionKeys();
+            return keys[envKey] ? 'session' : 'not_set';
+        }
+
+        function updateGearBadge() {
+            const badge = document.getElementById('settings-badge');
+            const anyMissing = ALL_KEYS.some(k => getKeyStatus(k) === 'not_set');
+            badge.style.display = anyMissing ? 'block' : 'none';
+        }
+
+        // ── Settings modal ────────────────────────────────────────
+        function openSettingsModal() {
+            const sessionKeys = getSessionKeys();
+            ALL_KEYS.forEach(envKey => {
+                const input   = document.getElementById(`key-input-${envKey}`);
+                const chip    = document.getElementById(`key-chip-${envKey}`);
+                const clearBtn = document.getElementById(`key-clear-${envKey}`);
+                const status = getKeyStatus(envKey);
+                input.value = '';
+                if (status === 'env') {
+                    chip.textContent = 'ENV';
+                    chip.className = 'key-chip env';
+                    input.disabled = true;
+                    input.placeholder = serverKeyStatus[envKey]?.masked || 'Set via environment';
+                    clearBtn.style.display = 'none';
+                } else if (status === 'session') {
+                    chip.textContent = 'SESSION';
+                    chip.className = 'key-chip session';
+                    input.disabled = false;
+                    input.placeholder = 'Enter to change';
+                    clearBtn.style.display = 'inline-flex';
+                } else {
+                    chip.textContent = '—';
+                    chip.className = 'key-chip none';
+                    input.disabled = false;
+                    input.placeholder = 'Not configured';
+                    clearBtn.style.display = 'none';
+                }
+            });
+            document.getElementById('settings-modal').style.display = 'flex';
+        }
+
+        function closeSettingsModal() {
+            document.getElementById('settings-modal').style.display = 'none';
+        }
+
+        function saveSettings() {
+            const sessionKeys = getSessionKeys();
+            ALL_KEYS.forEach(envKey => {
+                if (getKeyStatus(envKey) === 'env') return;
+                const val = document.getElementById(`key-input-${envKey}`).value.trim();
+                if (val) sessionKeys[envKey] = val;
+            });
+            saveSessionKeys(sessionKeys);
+            updateGearBadge();
+            closeSettingsModal();
+        }
+
+        function clearSessionKey(envKey) {
+            const keys = getSessionKeys();
+            delete keys[envKey];
+            saveSessionKeys(keys);
+            const chip    = document.getElementById(`key-chip-${envKey}`);
+            const input   = document.getElementById(`key-input-${envKey}`);
+            const clearBtn = document.getElementById(`key-clear-${envKey}`);
+            chip.textContent = '—';
+            chip.className = 'key-chip none';
+            input.placeholder = 'Not configured';
+            input.value = '';
+            clearBtn.style.display = 'none';
+            updateGearBadge();
+        }
+
+        document.getElementById('settings-btn').addEventListener('click', openSettingsModal);
+        document.getElementById('modal-close-btn').addEventListener('click', closeSettingsModal);
+        document.getElementById('modal-cancel-btn').addEventListener('click', closeSettingsModal);
+        document.getElementById('modal-save-btn').addEventListener('click', saveSettings);
+        document.getElementById('settings-modal').addEventListener('click', e => {
+            if (e.target === document.getElementById('settings-modal')) closeSettingsModal();
+        });
+        ALL_KEYS.forEach(envKey => {
+            document.getElementById(`key-clear-${envKey}`)
+                .addEventListener('click', () => clearSessionKey(envKey));
+        });
+
         const messagesEl = document.getElementById('messages');
         const emptyState = document.getElementById('empty-state');
         const loadingEl = document.getElementById('loading');
@@ -615,6 +1021,16 @@
         const submitBtn = document.getElementById('submit-btn');
         const charCounter = document.getElementById('char-counter');
         const MAX_CHARS = 25000;
+
+        // Framework selector
+        let selectedFramework = 'custom';
+        document.querySelectorAll('.fw-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.fw-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                selectedFramework = btn.dataset.fw;
+            });
+        });
 
         function autoResize() {
             input.style.height = 'auto';
@@ -641,9 +1057,10 @@
 
         async function init() {
             try {
-                const [health, tools] = await Promise.all([
+                const [health, tools, keysResp] = await Promise.all([
                     fetch(`${API}/health`).then(r => r.json()),
                     fetch(`${API}/tools`).then(r => r.json()),
+                    fetch(`${API}/config/keys`).then(r => r.json()),
                 ]);
                 modelName.textContent = health.model;
                 tools.forEach(t => {
@@ -653,12 +1070,15 @@
                     chip.title = t.description;
                     toolsBar.appendChild(chip);
                 });
+                serverKeyStatus = keysResp.keys || {};
+                updateGearBadge();
             } catch (e) {
                 modelName.textContent = 'offline';
                 document.querySelector('.dot').style.background = '#f87171';
                 document.querySelector('.status-pill').style.borderColor = 'rgba(248,113,113,0.3)';
                 document.querySelector('.status-pill').style.background = 'rgba(248,113,113,0.08)';
                 document.querySelector('.status-pill').style.color = '#f87171';
+                updateGearBadge();
             }
         }
         init();
@@ -674,7 +1094,7 @@
             input.style.height = 'auto';
             charCounter.style.display = 'none';
             submitBtn.disabled = true;
-            loadingLabel.textContent = 'routing…';
+            loadingLabel.textContent = selectedFramework === 'custom' ? 'routing…' : `running via ${selectedFramework}…`;
             loadingEl.style.display = 'flex';
             scrollToBottom();
 
@@ -682,44 +1102,95 @@
             messagesEl.appendChild(agentDiv);
 
             try {
-                const res = await fetch(`${API}/stream`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ task }),
-                });
+                if (selectedFramework === 'custom') {
+                    // SSE streaming path
+                    const res = await apiFetch(`${API}/stream`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ task }),
+                    });
 
-                if (!res.ok) {
-                    const errData = await res.json().catch(() => ({}));
-                    throw new Error(errData.detail || `HTTP ${res.status}`);
-                }
+                    if (!res.ok) {
+                        const errData = await res.json().catch(() => ({}));
+                        throw new Error(errData.detail || `HTTP ${res.status}`);
+                    }
 
-                const reader = res.body.getReader();
-                const decoder = new TextDecoder();
-                let buffer = '';
+                    const reader = res.body.getReader();
+                    const decoder = new TextDecoder();
+                    let buffer = '';
 
-                while (true) {
-                    const { done, value } = await reader.read();
-                    if (done) break;
-                    buffer += decoder.decode(value, { stream: true });
-                    const lines = buffer.split('\n');
-                    buffer = lines.pop(); // keep any partial final line
-                    for (const line of lines) {
-                        if (!line.startsWith('data: ')) continue;
-                        let event;
-                        try { event = JSON.parse(line.slice(6)); } catch { continue; }
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        buffer += decoder.decode(value, { stream: true });
+                        const lines = buffer.split('\n');
+                        buffer = lines.pop();
+                        for (const line of lines) {
+                            if (!line.startsWith('data: ')) continue;
+                            let event;
+                            try { event = JSON.parse(line.slice(6)); } catch { continue; }
 
-                        if (event.type === 'phase') {
-                            loadingLabel.textContent = event.label || event.phase;
-                        } else if (event.type === 'step') {
-                            appendStep(event.step, event.agent);
-                            scrollToBottom();
-                        } else if (event.type === 'retry') {
-                            loadingLabel.textContent = `⚠ retrying LLM (attempt ${event.attempt}/5)…`;
-                        } else if (event.type === 'done') {
-                            finalize(event.result);
-                        } else if (event.type === 'error') {
-                            finalize({ answer: `Error: ${event.message}`, steps: [], total_tokens: { input: 0, output: 0 }, model: '?', total_steps: 0 });
+                            if (event.type === 'phase') {
+                                loadingLabel.textContent = event.label || event.phase;
+                            } else if (event.type === 'step') {
+                                appendStep(event.step, event.agent);
+                                scrollToBottom();
+                            } else if (event.type === 'retry') {
+                                loadingLabel.textContent = `⚠ retrying LLM (attempt ${event.attempt}/5)…`;
+                            } else if (event.type === 'done') {
+                                finalize(event.result);
+                            } else if (event.type === 'error') {
+                                finalize({ answer: `Error: ${event.message}`, steps: [], total_tokens: { input: 0, output: 0 }, model: '?', total_steps: 0 });
+                            }
                         }
+                    }
+                } else {
+                    // Framework JSON endpoints (LangGraph, CrewAI, A2A)
+                    let endpoint, body;
+
+                    if (selectedFramework === 'a2a') {
+                        endpoint = `${API}/a2a`;
+                        body = JSON.stringify({
+                            jsonrpc: '2.0',
+                            method: 'tasks/send',
+                            id: `req-${Date.now()}`,
+                            params: {
+                                id: `task-${Date.now()}`,
+                                message: { role: 'user', parts: [{ text: task }] },
+                            },
+                        });
+                    } else {
+                        endpoint = `${API}/${selectedFramework}/run`;
+                        body = JSON.stringify({ task });
+                    }
+
+                    const res = await apiFetch(endpoint, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body,
+                    });
+
+                    if (!res.ok) {
+                        const errData = await res.json().catch(() => ({}));
+                        throw new Error(errData.detail || `HTTP ${res.status}`);
+                    }
+
+                    const data = await res.json();
+
+                    // Normalise A2A JSON-RPC response to common shape
+                    if (selectedFramework === 'a2a') {
+                        if (data.error) throw new Error(data.error.message || 'A2A error');
+                        const r = data.result || {};
+                        finalize({
+                            answer: r.artifacts?.[0]?.parts?.[0]?.text || '',
+                            steps: [],
+                            total_steps: r.metadata?.total_steps || 0,
+                            total_tokens: { input: 0, output: 0 },
+                            model: r.metadata?.model || '?',
+                            framework: 'a2a',
+                        });
+                    } else {
+                        finalize(data);
                     }
                 }
             } catch (err) {
@@ -818,8 +1289,11 @@
                 }
 
                 const tokens = data.total_tokens || { input: 0, output: 0 };
+                const fwLabel = data.framework && data.framework !== 'custom'
+                    ? `<span class="fw-badge">${escapeHtml(data.framework)}</span>` : '';
                 metaEl.innerHTML = `
                     <span>${escapeHtml(data.model || '')}</span>
+                    ${fwLabel}
                     <span>${(tokens.input || 0) + (tokens.output || 0)} tokens</span>
                     <span>${totalSteps} steps</span>
                 `;

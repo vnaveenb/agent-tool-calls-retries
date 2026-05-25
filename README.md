@@ -238,6 +238,82 @@ Step 3: LLM → Final Answer:
 
 ---
 
+## Framework Integrations
+
+The same agents, tools, and retry logic are exposed through three additional orchestration layers — running in parallel alongside the custom implementation. This demonstrates familiarity with industry frameworks while keeping the comparison clean: identical inputs, identical tools, different routing philosophy.
+
+### Architecture
+
+```
+User Request
+     │
+     ├─ POST /run ──────────────────────── Custom Orchestrator (imperative Python)
+     │                                               │
+     ├─ POST /langgraph/run ── LangGraph ────────────┤
+     │                         StateGraph            │  ResearchAgent
+     ├─ POST /crewai/run ───── CrewAI Crew ──────────┤  DocGeneratorAgent
+     │                                               │  GeneralAgent
+     └─ POST /a2a ─────────── JSON-RPC 2.0 ─────────┘
+              │
+              └─ GET /.well-known/agent.json → AgentCard (A2A discovery)
+```
+
+### Comparison
+
+| | **Custom** | **LangGraph** | **CrewAI** | **Google A2A** |
+|---|---|---|---|---|
+| Orchestration | Imperative Python (`if/elif`) | Declarative `StateGraph` | Role-based `Crew` | JSON-RPC 2.0 protocol |
+| Routing | Supervisor LLM + keyword override | Conditional graph edges | Dynamic task composition | Delegates to Custom Orchestrator |
+| New agents / tools? | No | No — wraps existing | No — wraps existing | No — wraps existing |
+| Endpoint | `POST /run` | `POST /langgraph/run` | `POST /crewai/run` | `POST /a2a` |
+| Discovery | — | — | — | `GET /.well-known/agent.json` |
+| Key portfolio value | Baseline | Graph inspectable via `draw_mermaid()` | Role/goal/backstory semantics | Cross-agent interoperability |
+
+### LangGraph (`POST /langgraph/run`)
+
+Replaces the orchestrator's `if/elif` intent chain with a `StateGraph`. Each existing agent (SupervisorAgent, ResearchAgent, DocGeneratorAgent, GeneralAgent) becomes a graph node. Conditional edges handle routing: supervisor → research / doc / general, and research → doc (for `research_then_generate`) or END (for `research_only`).
+
+The key portfolio value: the graph is fully inspectable and visualisable.
+```python
+from src.frameworks.langgraph_impl import get_graph
+print(get_graph().get_graph().draw_mermaid())
+```
+
+### CrewAI (`POST /crewai/run`)
+
+Replaces Python class instantiation with role-based agent definitions (role, goal, backstory). Tools are thin adapters converting `ToolResult → str` via the `@tool` decorator. Tasks are composed dynamically at runtime based on the request content, using the same keyword detection logic as the supervisor.
+
+`crew.kickoff()` is synchronous and is offloaded to a thread pool (`run_in_executor`) so the FastAPI event loop stays unblocked during long crew runs.
+
+### Google A2A (`POST /a2a`)
+
+Makes this agent compliant with the [Google A2A protocol](https://google.github.io/A2A/) — an open JSON-RPC 2.0 standard for agent-to-agent communication. Any A2A-compatible orchestration system can now call this agent without custom integration code.
+
+```bash
+# Discover the agent
+curl http://localhost:8000/.well-known/agent.json
+
+# Send an A2A task
+curl -X POST http://localhost:8000/a2a \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "method": "tasks/send",
+    "id": "req-1",
+    "params": {
+      "id": "task-abc",
+      "message": {
+        "role": "user",
+        "parts": [{"text": "What is 42 + 8?"}]
+      }
+    }
+  }'
+```
+
+The A2A implementation is protocol-only (no `google-adk` dependency) — just plain JSON-RPC 2.0 over FastAPI, making it lightweight and easy to audit.
+
+---
+
 ## Project Structure
 
 ```

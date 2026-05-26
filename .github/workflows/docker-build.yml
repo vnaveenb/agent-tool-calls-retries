@@ -20,8 +20,16 @@ jobs:
       packages: write
 
     steps:
-      - name: Checkout repository
+      - name: Checkout project 04 (this repo)
         uses: actions/checkout@v4
+        with:
+          path: 04-agent-tool-calls-retries
+
+      - name: Checkout project 06 (token-cost-dashboard)
+        uses: actions/checkout@v4
+        with:
+          repository: vnaveenb/06-token-cost-budget-dashboard
+          path: 06-token-cost-budget-dashboard
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
@@ -46,6 +54,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
+          file: 04-agent-tool-calls-retries/Dockerfile
           push: ${{ github.event_name == 'push' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

@@ -20,6 +20,8 @@ from .agent import ReActAgent
 from .orchestrator import Orchestrator
 from .tools import list_tools
 from .tools.base import tool_def_to_litellm_schema
+from token_cost_dashboard import db as _tracker_db, tracker as _tracker
+from token_cost_dashboard.budget import BudgetExceededError
 
 # Configure logging so agent logs appear in uvicorn output
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -61,6 +63,16 @@ app.add_middleware(
 # Serve static UI
 _static_dir = Path(__file__).parent / "static"
 app.mount("/static", StaticFiles(directory=str(_static_dir)), name="static")
+
+
+@app.on_event("startup")
+def _startup_tracker() -> None:
+    _db_path = os.getenv("TRACKER_DB_PATH") or str(
+        Path(__file__).parent.parent.parent / "06-token-cost-budget-dashboard" / "data" / "usage.db"
+    )
+    _tracker_db.configure(_db_path)
+    _tracker_db.init_db()
+    _tracker.register_callbacks(project_id="04-agent-retries")
 
 
 # ── Rate limiter (in-memory, per-IP) ─────────────────────────
@@ -136,13 +148,16 @@ async def run_task(req: RunRequest, request: Request):
     _apply_request_keys(request)
 
     cfg = get_config()
-    if cfg.agents.use_orchestrator:
-        orchestrator = Orchestrator()
-        result = await orchestrator.run(req.task)
-    else:
-        # Legacy single-agent mode
-        agent = ReActAgent()
-        result = await agent.run(req.task)
+    try:
+        if cfg.agents.use_orchestrator:
+            orchestrator = Orchestrator()
+            result = await orchestrator.run(req.task)
+        else:
+            # Legacy single-agent mode
+            agent = ReActAgent()
+            result = await agent.run(req.task)
+    except BudgetExceededError as exc:
+        raise HTTPException(402, detail=str(exc))
 
     return asdict(result)
 

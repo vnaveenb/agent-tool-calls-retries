@@ -1,15 +1,23 @@
 services:
   agent:
-    build: .
+    build:
+      context: ..
+      dockerfile: 04-agent-tool-calls-retries/Dockerfile
     ports:
       - "8000:8000"
     env_file: .env
+    environment:
+      - TRACKER_DB_PATH=/app/data/usage.db
     volumes:
-      - ./data:/app/data
       - ./traces:/app/traces
+      - tracker_data:/app/data
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
       timeout: 5s
       retries: 3
+
+volumes:
+  tracker_data:
+    external: true

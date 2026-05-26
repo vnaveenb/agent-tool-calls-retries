@@ -12,6 +12,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy project 06 source as the token_cost_dashboard package
 COPY 06-token-cost-budget-dashboard/src ./token_cost_dashboard
+COPY 06-token-cost-budget-dashboard/schema ./schema
 
 # Copy project 04 source
 COPY 04-agent-tool-calls-retries/ .

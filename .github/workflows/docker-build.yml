@@ -1,16 +1,22 @@
-name: Build & Push Docker Image
+name: 04 – Build & Push Docker Image
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
+    paths:
+      - "04-agent-tool-calls-retries/**"
+      - "06-token-cost-budget-dashboard/src/**"
+      - "06-token-cost-budget-dashboard/schema/**"
   pull_request:
-    branches:
-      - main
+    branches: [main]
+    paths:
+      - "04-agent-tool-calls-retries/**"
+      - "06-token-cost-budget-dashboard/src/**"
+      - "06-token-cost-budget-dashboard/schema/**"
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  IMAGE_NAME: ${{ github.repository_owner }}/04-agent-tool-calls-retries
 
 jobs:
   build-and-push:
@@ -20,16 +26,8 @@ jobs:
       packages: write
 
     steps:
-      - name: Checkout project 04 (this repo)
+      - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          path: 04-agent-tool-calls-retries
-
-      - name: Checkout project 06 (token-cost-dashboard)
-        uses: actions/checkout@v4
-        with:
-          repository: vnaveenb/06-token-cost-budget-dashboard
-          path: 06-token-cost-budget-dashboard
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3

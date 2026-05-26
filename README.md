@@ -50,6 +50,44 @@ Or open **http://localhost:8000/docs** for the interactive Swagger UI.
 
 ---
 
+## Docker
+
+The Dockerfile is built from the **parent `projects/` directory** as context — it bundles both this project and Project 06's tracker package into a single image so every agent LLM call is logged automatically.
+
+### Standalone (this service only)
+
+```bash
+# From the parent projects/ directory
+docker build -f 04-agent-tool-calls-retries/Dockerfile -t agent-tool-calls .
+docker run -p 8000:8000 \
+  -e GEMINI_API_KEY=your_key \
+  -e TRACKER_DB_PATH=/app/data/usage.db \
+  -v agent_data:/app/data \
+  -v agent_traces:/app/traces \
+  agent-tool-calls
+```
+
+### With Project 06 dashboard (shared volume)
+
+```bash
+# 1. Create the shared volume (once)
+docker volume create dashboard_data
+
+# 2. Start the dashboard first (initialises usage.db)
+cd ../06-token-cost-budget-dashboard && docker compose up -d
+
+# 3. Start the agent (writes into the same volume)
+cd ../04-agent-tool-calls-retries && docker compose up -d
+```
+
+The agent mounts `dashboard_data:/app/data` — the same named volume Project 06 uses — so every LLM call the agent makes appears live on the dashboard at **http://localhost:8100/dashboard**.
+
+### CI/CD
+
+GitHub Actions (`.github/workflows/docker-build.yml`) checks out both this repo **and** `vnaveenb/06-token-cost-budget-dashboard` into sibling directories, then builds with context `.` and `file: 04-agent-tool-calls-retries/Dockerfile` — replicating the same parent-directory layout locally.
+
+---
+
 ## High-Level Design (HLD)
 
 ### System Overview
@@ -318,6 +356,11 @@ The A2A implementation is protocol-only (no `google-adk` dependency) — just pl
 
 ```
 04-agent-tool-calls-retries/
+├── Dockerfile               # Built from parent projects/ dir (bundles project 06 tracker)
+├── docker-compose.yml       # Standalone run; shares dashboard_data volume with project 06
+├── .github/
+│   └── workflows/
+│       └── docker-build.yml # Checks out both repos → builds → pushes to GHCR
 ├── config.yaml              # LLM + agent + tool settings (hot-swappable)
 ├── .env.example             # API key template
 ├── .gitignore
@@ -416,6 +459,45 @@ This project is the foundation for:
 
 - **Project 5 — Multi-Agent Orchestrator**: supervisor agent delegates to specialized sub-agents built on this same loop
 - **Project 17 — Web & Computer Use Agent**: extend `tools/` with Playwright browser actions (click, type, screenshot) and wire into the same ReAct loop
+
+---
+
+## Live Cost Tracking (Project 06 Integration)
+
+Every LLM call the agent makes is automatically logged to Project 06's Token Cost Budget Dashboard. No code changes needed — it's wired at startup.
+
+**How it works:**
+
+```
+Agent calls litellm.acompletion(...)
+    │
+    ▼  LiteLLM success/failure callback (registered at startup)
+    │
+    ├── Extracts: model, input_tokens, output_tokens, latency, cost
+    └── Writes one row to usage_log in usage.db (project_id = "04-agent-retries")
+```
+
+The startup hook in `src/api.py`:
+
+```python
+@app.on_event("startup")
+def _startup_tracker():
+    _tracker_db.configure(os.getenv("TRACKER_DB_PATH"))
+    _tracker_db.init_db()
+    _tracker.register_callbacks(project_id="04-agent-retries")
+```
+
+**In Docker**, both services share the `dashboard_data` named volume. Set `TRACKER_DB_PATH=/app/data/usage.db` and the agent writes directly into the dashboard's database.
+
+**What the dashboard shows for this agent:**
+
+| Dashboard view | What you see |
+|---|---|
+| KPI row | Total tokens + cost for all agent runs (7-day) |
+| Cost by model | Which LLM the agent is using and what it costs |
+| Recent calls | Per-step LLM calls with latency and token counts |
+| Budget gauges | Spend vs limit for `project_id = "04-agent-retries"` |
+| Top consumers | This agent ranked against other projects |
 
 ---
 

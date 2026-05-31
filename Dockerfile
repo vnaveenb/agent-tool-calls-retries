@@ -1,4 +1,4 @@
-FROM python:3.12-slim
+FROM python:3.12.13-slim
 
 # Security: run as non-root user
 RUN groupadd -r agent && useradd -r -g agent -m agent

@@ -28,6 +28,8 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
 
+from contextlib import asynccontextmanager, contextmanager
+
 # ── Per-request API key injection ─────────────────────────────
 
 _HEADER_TO_ENV: dict[str, str] = {
@@ -48,12 +50,27 @@ def _mask_key(v: str) -> str:
     return v[:4] + "***" + v[-4:]
 
 
-def _apply_request_keys(request: Request) -> None:
-    """Inject API keys from request headers into os.environ for this request."""
+@contextmanager
+def scoped_request_keys(request: Request):
+    """Temporarily inject user-provided request headers into os.environ for the duration of this request only."""
+    original_env: dict[str, str | None] = {}
+    applied = False
     for header, env_var in _HEADER_TO_ENV.items():
         val = request.headers.get(header, "").strip()
         if val:
+            original_env[env_var] = os.environ.get(env_var)
             os.environ[env_var] = val
+            applied = True
+    try:
+        yield
+    finally:
+        if applied:
+            for env_var, orig_val in original_env.items():
+                if orig_val is None:
+                    os.environ.pop(env_var, None)
+                else:
+                    os.environ[env_var] = orig_val
+
 
 app = FastAPI(title="Agent with Tool Calls + Retries", version="1.0.0")
 app.add_middleware(
@@ -77,20 +94,48 @@ def _startup_tracker() -> None:
 
 # ── Rate limiter (in-memory, per-IP) ─────────────────────────
 
-_RATE_LIMIT_RPM = 10  # max requests per minute per IP
+_DAILY_LIMIT = int(os.getenv("RATE_LIMIT_PER_IP_PER_DAY", "10"))
+_BURST_LIMIT = int(os.getenv("RATE_LIMIT_PER_IP_PER_MINUTE", "5"))
 _rate_store: dict[str, list[float]] = defaultdict(list)
 
 
-def _check_rate_limit(client_ip: str) -> bool:
-    """Returns True if request is allowed, False if rate limited."""
+def _get_client_ip(request: Request) -> str:
+    cf_ip = request.headers.get("cf-connecting-ip")
+    if cf_ip:
+        return cf_ip.strip()
+    x_real_ip = request.headers.get("x-real-ip")
+    if x_real_ip:
+        return x_real_ip.strip()
+    xff = request.headers.get("x-forwarded-for")
+    if xff:
+        return xff.split(",")[0].strip()
+    return request.client.host if request.client else "127.0.0.1"
+
+
+def _check_rate_limit(request: Request) -> None:
+    ip = _get_client_ip(request)
     now = time.time()
-    window = now - 60  # 1-minute window
-    # Clean old entries
-    _rate_store[client_ip] = [t for t in _rate_store[client_ip] if t > window]
-    if len(_rate_store[client_ip]) >= _RATE_LIMIT_RPM:
-        return False
-    _rate_store[client_ip].append(now)
-    return True
+    cutoff_day = now - 86400
+    cutoff_min = now - 60
+
+    calls = _rate_store[ip]
+    _rate_store[ip] = [t for t in calls if t > cutoff_day]
+    calls = _rate_store[ip]
+
+    burst_calls = sum(1 for t in calls if t > cutoff_min)
+    if burst_calls >= _BURST_LIMIT:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Burst rate limit exceeded ({_BURST_LIMIT} requests/minute). Please wait.",
+        )
+
+    if len(calls) >= _DAILY_LIMIT:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Daily rate limit reached ({_DAILY_LIMIT} requests/day).",
+        )
+
+    _rate_store[ip].append(now)
 
 
 # ── Request/Response models ───────────────────────────────────
@@ -140,24 +185,21 @@ def health():
 
 @app.post("/run")
 async def run_task(req: RunRequest, request: Request):
-    # Rate limiting
-    client_ip = request.client.host if request.client else "unknown"
-    if not _check_rate_limit(client_ip):
-        raise HTTPException(429, "Rate limit exceeded. Maximum 10 requests per minute.")
+    # Enforce 10 req/day per IP + 5 req/min burst
+    _check_rate_limit(request)
 
-    _apply_request_keys(request)
-
-    cfg = get_config()
-    try:
-        if cfg.agents.use_orchestrator:
-            orchestrator = Orchestrator()
-            result = await orchestrator.run(req.task)
-        else:
-            # Legacy single-agent mode
-            agent = ReActAgent()
-            result = await agent.run(req.task)
-    except BudgetExceededError as exc:
-        raise HTTPException(402, detail=str(exc))
+    with scoped_request_keys(request):
+        cfg = get_config()
+        try:
+            if cfg.agents.use_orchestrator:
+                orchestrator = Orchestrator()
+                result = await orchestrator.run(req.task)
+            else:
+                # Legacy single-agent mode
+                agent = ReActAgent()
+                result = await agent.run(req.task)
+        except BudgetExceededError as exc:
+            raise HTTPException(402, detail=str(exc))
 
     return asdict(result)
 
@@ -173,11 +215,8 @@ async def stream_task(req: RunRequest, request: Request):
       - ``{"type": "done",  "result": {...}}``  — final payload
       - ``{"type": "error", "message": str}``
     """
-    client_ip = request.client.host if request.client else "unknown"
-    if not _check_rate_limit(client_ip):
-        raise HTTPException(429, "Rate limit exceeded. Maximum 10 requests per minute.")
-
-    _apply_request_keys(request)
+    # Enforce 10 req/day per IP + 5 req/min burst
+    _check_rate_limit(request)
 
     queue: asyncio.Queue[dict] = asyncio.Queue()
 
@@ -185,18 +224,19 @@ async def stream_task(req: RunRequest, request: Request):
         def on_event(event: dict) -> None:
             queue.put_nowait(event)
 
-        try:
-            cfg = get_config()
-            if cfg.agents.use_orchestrator:
-                orchestrator = Orchestrator()
-                result = await orchestrator.run(req.task, on_event=on_event)
-            else:
-                agent = ReActAgent()
-                result = await agent.run(req.task, on_event=on_event)
-            queue.put_nowait({"type": "done", "result": asdict(result)})
-        except Exception as exc:
-            logger.exception("[stream] agent error")
-            queue.put_nowait({"type": "error", "message": str(exc)})
+        with scoped_request_keys(request):
+            try:
+                cfg = get_config()
+                if cfg.agents.use_orchestrator:
+                    orchestrator = Orchestrator()
+                    result = await orchestrator.run(req.task, on_event=on_event)
+                else:
+                    agent = ReActAgent()
+                    result = await agent.run(req.task, on_event=on_event)
+                queue.put_nowait({"type": "done", "result": asdict(result)})
+            except Exception as exc:
+                logger.exception("[stream] agent error")
+                queue.put_nowait({"type": "error", "message": str(exc)})
 
     async def generate():
         producer = asyncio.create_task(produce())

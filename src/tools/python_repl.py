@@ -63,8 +63,28 @@ _PIP_INSTALL_RE = re.compile(
 )
 
 
+import ast
+
+_DANGEROUS_CALLS = {"eval", "exec", "open", "compile", "globals", "locals", "getattr", "setattr", "delattr"}
+
+
+def _check_ast_safety(code: str) -> str | None:
+    """Parse AST to detect reflection, dunder attribute escapes, and forbidden builtins."""
+    try:
+        tree = ast.parse(code)
+    except SyntaxError:
+        return None
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Attribute) and node.attr.startswith("__") and node.attr.endswith("__"):
+            return f"BLOCKED: Dunder attribute access '{node.attr}' is forbidden"
+        if isinstance(node, ast.Name) and node.id in _DANGEROUS_CALLS:
+            return f"BLOCKED: Access to '{node.id}' is forbidden"
+    return None
+
+
 def _validate_code(code: str) -> str | None:
-    """Check code against blocklist. Returns error message if blocked, None if OK."""
+    """Check code against blocklist and AST safety. Returns error message if blocked, None if OK."""
     # Check for pip install of non-allowlisted packages
     pip_matches = _PIP_INSTALL_RE.findall(code)
     for pkg in pip_matches:
@@ -78,10 +98,15 @@ def _validate_code(code: str) -> str | None:
         # If it's an allowed pip install, skip the subprocess block for this code
         return None
 
-    # Check blocked patterns
+    # Check blocked regex patterns
     for pattern, message in _BLOCKED_PATTERNS:
         if re.search(pattern, code):
             return f"BLOCKED: {message}"
+
+    # Check AST-level reflection and dangerous builtins
+    ast_violation = _check_ast_safety(code)
+    if ast_violation:
+        return ast_violation
 
     return None
 

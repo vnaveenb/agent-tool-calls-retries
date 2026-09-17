@@ -1,6 +1,6 @@
-from __future__ import annotations
-
+import ipaddress
 import re
+import socket
 from urllib.parse import urlparse
 
 import httpx
@@ -43,7 +43,7 @@ def _extract_body_text(html: str) -> str:
 def http_get(url: str) -> ToolResult:
     """Fetch a URL and return its text content (truncated to 8000 chars).
 
-    Only allows http:// and https:// schemes to prevent SSRF.
+    Only allows http:// and https:// schemes and blocks private/internal IPs to prevent SSRF.
     Sends a browser User-Agent to avoid 403s from sites that block bots.
     Detects JavaScript SPAs and warns the agent to rely on web_search instead.
     """
@@ -58,6 +58,33 @@ def http_get(url: str) -> ToolResult:
 
     if not parsed.netloc:
         return ToolResult(success=False, output="", error="Invalid URL: no host specified.")
+
+    hostname = parsed.hostname
+    if not hostname:
+        return ToolResult(success=False, output="", error="Invalid URL: no host specified.")
+
+    # Block obvious loopback/local hostnames
+    if hostname.lower() in {"localhost", "127.0.0.1", "0.0.0.0", "::1"} or hostname.lower().endswith(".local"):
+        return ToolResult(
+            success=False,
+            output="",
+            error=f"Access denied: destination '{hostname}' is not a permitted public host (SSRF blocked).",
+        )
+
+    # DNS resolve & verify IP is not private or loopback
+    try:
+        addr_info = socket.getaddrinfo(hostname, None)
+        for _, _, _, _, sockaddr in addr_info:
+            ip_str = sockaddr[0]
+            ip = ipaddress.ip_address(ip_str)
+            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast:
+                return ToolResult(
+                    success=False,
+                    output="",
+                    error=f"Access denied: destination resolves to private IP '{ip_str}' (SSRF blocked).",
+                )
+    except socket.gaierror:
+        return ToolResult(success=False, output="", error=f"Could not resolve host '{hostname}'.")
 
     try:
         response = httpx.get(url, timeout=10, follow_redirects=True, headers=_HEADERS)

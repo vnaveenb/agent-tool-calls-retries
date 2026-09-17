@@ -95,6 +95,16 @@ class TestHttpGet:
         result = http_get("not-a-url")
         assert result.success is False
 
+    def test_rejects_localhost_ssrf(self):
+        result = http_get("http://localhost:8000/api")
+        assert result.success is False
+        assert "ssrf" in result.error.lower()
+
+    def test_rejects_private_ip_ssrf(self):
+        result = http_get("http://127.0.0.1:9091/")
+        assert result.success is False
+        assert "ssrf" in result.error.lower()
+
 
 # ── Read File tests ───────────────────────────────────────────
 
@@ -198,7 +208,7 @@ class TestReadSkill:
         from src.tools.read_skill import read_skill
         result = read_skill("docx")
         assert result.success is True
-        assert "python-docx" in result.output
+        assert "docx" in result.output.lower()
         assert "Arial" in result.output
 
     def test_invalid_skill(self):

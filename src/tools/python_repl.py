@@ -26,6 +26,13 @@ _BLOCKED_PATTERNS: list[tuple[str, str]] = [
     (r"\b__import__\s*\(", "__import__() is blocked"),
     (r"\bimportlib", "importlib is blocked"),
     (r"\bcompile\s*\(", "compile() is blocked"),
+    # System & environment files
+    (r"(?:/|^)proc[/\b]", "Access to /proc filesystem is blocked"),
+    (r"(?:/|^)sys[/\b]", "Access to /sys filesystem is blocked"),
+    (r"(?:/|^)etc[/\b]", "Access to /etc filesystem is blocked"),
+    (r"(?:/|^)dev[/\b]", "Access to /dev filesystem is blocked"),
+    (r"\benviron\b", "Access to environment variables is blocked"),
+    (r"\bgetenv\b", "Access to getenv is blocked"),
     # Dangerous modules
     (r"\bimport\s+os\b", "import os is blocked — use pathlib for ./data/ paths"),
     (r"\bfrom\s+os\b", "from os is blocked"),
@@ -64,12 +71,13 @@ _PIP_INSTALL_RE = re.compile(
 
 
 import ast
+import os
 
-_DANGEROUS_CALLS = {"eval", "exec", "open", "compile", "globals", "locals", "getattr", "setattr", "delattr"}
+_DANGEROUS_CALLS = {"eval", "exec", "open", "compile", "globals", "locals", "getattr", "setattr", "delattr", "vars", "dir"}
 
 
 def _check_ast_safety(code: str) -> str | None:
-    """Parse AST to detect reflection, dunder attribute escapes, and forbidden builtins."""
+    """Parse AST to detect reflection, dunder attribute escapes, forbidden builtins, and system paths."""
     try:
         tree = ast.parse(code)
     except SyntaxError:
@@ -80,6 +88,10 @@ def _check_ast_safety(code: str) -> str | None:
             return f"BLOCKED: Dunder attribute access '{node.attr}' is forbidden"
         if isinstance(node, ast.Name) and node.id in _DANGEROUS_CALLS:
             return f"BLOCKED: Access to '{node.id}' is forbidden"
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            v = node.value.lower()
+            if any(b in v for b in ["/proc", "/sys", "/etc", "/dev", "environ", ".env"]):
+                return f"BLOCKED: System or environment path '{node.value}' is forbidden"
     return None
 
 
@@ -115,7 +127,7 @@ def python_repl(code: str) -> ToolResult:
     """Execute Python code in a subprocess with a timeout.
 
     Returns stdout on success or stderr on failure.
-    Security: code is scanned for dangerous patterns before execution.
+    Security: code is scanned for dangerous patterns before execution and runs in a sanitized environment.
     """
     # ── Security validation ──
     violation = _validate_code(code)
@@ -125,12 +137,21 @@ def python_repl(code: str) -> ToolResult:
     cfg = get_config()
     timeout = cfg.tools.python_repl.timeout_seconds
 
+    # Stripped execution environment with zero API keys or secrets
+    clean_env = {
+        "PATH": "/usr/local/bin:/usr/bin:/bin",
+        "LANG": "C.UTF-8",
+        "HOME": "/tmp",
+        "PYTHONPATH": os.environ.get("PYTHONPATH", ""),
+    }
+
     try:
         result = subprocess.run(
             [sys.executable, "-c", code],
             capture_output=True,
             text=True,
             timeout=timeout,
+            env=clean_env,
         )
 
         if result.returncode == 0:

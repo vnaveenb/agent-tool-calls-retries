@@ -72,6 +72,24 @@ class TestCodeBlocklist:
         code = "import importlib\nimportlib.import_module('os')"
         assert _validate_code(code) is not None
 
+    def test_blocks_proc_filesystem(self):
+        code = "from pathlib import Path\nprint(Path('/proc/self/environ').read_bytes())"
+        result = python_repl(code)
+        assert not result.success
+        assert "blocked" in result.error.lower() or "forbidden" in result.error.lower()
+
+    def test_blocks_environ_keyword(self):
+        code = "from pathlib import Path\np = 'environ'\nprint(p)"
+        result = python_repl(code)
+        assert not result.success
+        assert "blocked" in result.error.lower() or "forbidden" in result.error.lower()
+
+    def test_blocks_sys_and_etc_filesystem(self):
+        code1 = "from pathlib import Path\nprint(Path('/etc/passwd').read_text())"
+        code2 = "from pathlib import Path\nprint(Path('/sys/class').exists())"
+        assert not python_repl(code1).success
+        assert not python_repl(code2).success
+
 
 # ── Allowed Code Tests ───────────────────────────────────────────────────────
 
